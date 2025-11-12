@@ -1,6 +1,7 @@
 import { getRoomDetails, getRoomReviews } from '@/apis/roomApi';
 import { BOOKING_COLORS, Room } from '@/constants/booking';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useQuery } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -19,7 +20,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import DateTimePicker from '@react-native-community/datetimepicker';
 
 interface Review {
   id: string | number;
@@ -43,6 +43,7 @@ export default function HotelDetailScreen(): React.JSX.Element {
   const [isFavorite, setIsFavorite] = useState<boolean>(false);
   const [reviewsModalVisible, setReviewsModalVisible] = useState<boolean>(false);
   const [imageModalVisible, setImageModalVisible] = useState<boolean>(false);
+  const [galleryModalVisible, setGalleryModalVisible] = useState<boolean>(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
   const imageFlatListRef = useRef<FlatList>(null);
   
@@ -371,11 +372,12 @@ export default function HotelDetailScreen(): React.JSX.Element {
               <View style={styles.bookingSectionHeader}>
                 <TouchableOpacity
                   onPress={() => setBookingStep('date')}
-                  style={styles.backButton}>
-                  <Ionicons name="arrow-back" size={20} color={BOOKING_COLORS.PRIMARY} />
+                  style={styles.bookingBackButton}
+                  activeOpacity={0.7}>
+                  <Ionicons name="arrow-back" size={22} color={BOOKING_COLORS.PRIMARY} />
                 </TouchableOpacity>
                 <Text style={styles.bookingSectionTitle}>Thông tin đặt phòng</Text>
-                <View style={styles.backButton} />
+                <View style={styles.bookingHeaderSpacer} />
               </View>
               <View style={styles.bookingRow}>
                 <View style={styles.bookingItem}>
@@ -478,7 +480,7 @@ export default function HotelDetailScreen(): React.JSX.Element {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Ảnh</Text>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => setGalleryModalVisible(true)}>
                 <Text style={styles.seeAllText}>Xem tất cả</Text>
               </TouchableOpacity>
             </View>
@@ -842,6 +844,62 @@ export default function HotelDetailScreen(): React.JSX.Element {
               )}
             </View>
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Gallery Grid Modal */}
+      <Modal
+        visible={galleryModalVisible}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setGalleryModalVisible(false)}>
+        <View style={[styles.galleryModalContainer, { paddingTop: insets.top }]}>
+          <StatusBar barStyle="dark-content" />
+          
+          {/* Gallery Header */}
+          <View style={styles.galleryHeader}>
+            <TouchableOpacity
+              onPress={() => setGalleryModalVisible(false)}
+              style={styles.galleryBackButton}
+              activeOpacity={0.7}>
+              <Ionicons name="arrow-back" size={22} color={BOOKING_COLORS.TEXT_PRIMARY} />
+            </TouchableOpacity>
+            <Text style={styles.galleryTitle}>Photos</Text>
+            <View style={styles.galleryHeaderSpacer} />
+          </View>
+
+          {/* Gallery Grid */}
+          {imageUrls.length > 0 ? (
+            <FlatList
+              data={imageUrls}
+              numColumns={3}
+              keyExtractor={(item, index) => `gallery-image-${index}-${item ? item.substring(item.length - 20) : 'empty'}`}
+              contentContainerStyle={styles.galleryGrid}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item, index }) => (
+                <TouchableOpacity
+                  style={styles.galleryItem}
+                  onPress={() => {
+                    setSelectedImageIndex(index);
+                    setGalleryModalVisible(false);
+                    setImageModalVisible(true);
+                  }}
+                  activeOpacity={0.8}>
+                  <ExpoImage
+                    source={{ uri: item }}
+                    style={styles.galleryImage}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                </TouchableOpacity>
+              )}
+            />
+          ) : (
+            <View style={styles.galleryEmptyContainer}>
+              <Ionicons name="images-outline" size={64} color={BOOKING_COLORS.TEXT_SECONDARY} />
+              <Text style={styles.galleryEmptyText}>Chưa có ảnh</Text>
+            </View>
+          )}
         </View>
       </Modal>
 
@@ -1728,11 +1786,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  backButton: {
-    width: 32,
-    height: 32,
+  bookingBackButton: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 20,
+    backgroundColor: BOOKING_COLORS.CARD_BACKGROUND,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: {
+          width: 0,
+          height: 1,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  bookingHeaderSpacer: {
+    width: 40,
+    height: 40,
   },
   bookingSectionTitle: {
     flex: 1,
@@ -1820,5 +1898,77 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: BOOKING_COLORS.BACKGROUND,
+  },
+  galleryModalContainer: {
+    flex: 1,
+    backgroundColor: BOOKING_COLORS.BACKGROUND,
+  },
+  galleryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: BOOKING_COLORS.BORDER,
+    backgroundColor: BOOKING_COLORS.BACKGROUND,
+  },
+  galleryBackButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+    backgroundColor: BOOKING_COLORS.CARD_BACKGROUND,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: {
+          width: 0,
+          height: 1,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  galleryHeaderSpacer: {
+    width: 40,
+    height: 40,
+  },
+  galleryTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: BOOKING_COLORS.TEXT_PRIMARY,
+  },
+  galleryGrid: {
+    padding: 2,
+  },
+  galleryItem: {
+    flex: 1,
+    aspectRatio: 1,
+    margin: 2,
+    borderRadius: 2,
+    overflow: 'hidden',
+    backgroundColor: BOOKING_COLORS.CARD_BACKGROUND,
+  },
+  galleryImage: {
+    width: '100%',
+    height: '100%',
+  },
+  galleryEmptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 64,
+  },
+  galleryEmptyText: {
+    fontSize: 16,
+    color: BOOKING_COLORS.TEXT_SECONDARY,
+    marginTop: 16,
+    textAlign: 'center',
   },
 });

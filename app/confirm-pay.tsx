@@ -10,6 +10,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Platform,
   ScrollView,
   StatusBar,
@@ -18,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 
@@ -52,6 +54,24 @@ export default function ConfirmPayScreen(): React.JSX.Element {
   const [userId, setUserId] = useState<string>('');
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
   const [selectedCardDetail, setSelectedCardDetail] = useState<Card | null>(null);
+  
+  // Initialize dates and guests from params
+  const [checkIn, setCheckIn] = useState<Date>(new Date(params.checkInDate || ''));
+  const [checkOut, setCheckOut] = useState<Date>(new Date(params.checkOutDate || ''));
+  const [adults, setAdults] = useState<number>(parseInt(params.adults || '2', 10));
+  const [children, setChildren] = useState<number>(parseInt(params.children || '0', 10));
+  const [rooms, setRooms] = useState<number>(parseInt(params.rooms || '1', 10));
+  
+  // Edit booking states
+  const [editDateModalVisible, setEditDateModalVisible] = useState<boolean>(false);
+  const [editGuestsModalVisible, setEditGuestsModalVisible] = useState<boolean>(false);
+  const [tempCheckIn, setTempCheckIn] = useState<Date>(new Date(params.checkInDate || ''));
+  const [tempCheckOut, setTempCheckOut] = useState<Date>(new Date(params.checkOutDate || ''));
+  const [tempAdults, setTempAdults] = useState<number>(parseInt(params.adults || '2', 10));
+  const [tempChildren, setTempChildren] = useState<number>(parseInt(params.children || '0', 10));
+  const [tempRooms, setTempRooms] = useState<number>(parseInt(params.rooms || '1', 10));
+  const [showCheckInPicker, setShowCheckInPicker] = useState<boolean>(false);
+  const [showCheckOutPicker, setShowCheckOutPicker] = useState<boolean>(false);
 
   React.useEffect(() => {
     const fetchUserId = async () => {
@@ -122,11 +142,24 @@ export default function ConfirmPayScreen(): React.JSX.Element {
     }
   }, [selectedCardId, selectedPaymentOption]);
 
-  const checkIn = new Date(params.checkInDate || '');
-  const checkOut = new Date(params.checkOutDate || '');
-  const nights = params.nights ? parseInt(params.nights, 10) : Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
+  // Update temp values when modal opens
+  React.useEffect(() => {
+    if (editDateModalVisible) {
+      setTempCheckIn(checkIn);
+      setTempCheckOut(checkOut);
+    }
+  }, [editDateModalVisible]);
+  
+  React.useEffect(() => {
+    if (editGuestsModalVisible) {
+      setTempAdults(adults);
+      setTempChildren(children);
+      setTempRooms(rooms);
+    }
+  }, [editGuestsModalVisible]);
+  
+  const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
   const pricePerNight = parseFloat(params.pricePerNight || '0');
-  const rooms = parseInt(params.rooms || '1', 10);
   const basePrice = nights * pricePerNight * rooms;
   const discount = 50;
   const taxes = 10;
@@ -142,6 +175,63 @@ export default function ConfirmPayScreen(): React.JSX.Element {
       month: 'long',
       year: 'numeric',
     });
+  };
+
+  const formatDateShort = (date: Date): string => {
+    return date.toLocaleDateString('vi-VN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  const handleCheckInChange = (event: any, selectedDate?: Date): void => {
+    if (Platform.OS === 'android') {
+      setShowCheckInPicker(false);
+    }
+    if (selectedDate) {
+      setTempCheckIn(selectedDate);
+      // Auto update check-out if it's before check-in
+      if (tempCheckOut <= selectedDate) {
+        const newCheckOut = new Date(selectedDate);
+        newCheckOut.setDate(newCheckOut.getDate() + 1);
+        setTempCheckOut(newCheckOut);
+      }
+    }
+  };
+
+  const handleCheckOutChange = (event: any, selectedDate?: Date): void => {
+    if (Platform.OS === 'android') {
+      setShowCheckOutPicker(false);
+    }
+    if (selectedDate && selectedDate > tempCheckIn) {
+      setTempCheckOut(selectedDate);
+    }
+  };
+
+  const handleSaveDateChanges = (): void => {
+    if (tempCheckIn && tempCheckOut && tempCheckOut > tempCheckIn) {
+      setCheckIn(tempCheckIn);
+      setCheckOut(tempCheckOut);
+      setEditDateModalVisible(false);
+    }
+  };
+
+  const handleSaveGuestsChanges = (): void => {
+    setAdults(tempAdults);
+    setChildren(tempChildren);
+    setRooms(tempRooms);
+    setEditGuestsModalVisible(false);
+  };
+
+  const updateCount = (type: 'adults' | 'children' | 'rooms', delta: number): void => {
+    if (type === 'adults') {
+      setTempAdults(Math.max(1, Math.min(10, tempAdults + delta)));
+    } else if (type === 'children') {
+      setTempChildren(Math.max(0, Math.min(10, tempChildren + delta)));
+    } else if (type === 'rooms') {
+      setTempRooms(Math.max(1, Math.min(5, tempRooms + delta)));
+    }
   };
 
   // Format date cho API: "DD-MM-YYYY HH:mm"
@@ -210,9 +300,9 @@ export default function ConfirmPayScreen(): React.JSX.Element {
         roomId: parseInt(params.roomId, 10),
         checkInDate: formatDateForAPI(checkIn, '14:00'),
         checkOutDate: formatDateForAPI(checkOut, '12:00'),
-        adults: parseInt(params.adults || '2', 10),
-        children: parseInt(params.children || '0', 10),
-        rooms: parseInt(params.rooms || '1', 10),
+        adults: adults,
+        children: children,
+        rooms: rooms,
         typePayment: true, // true = thanh toán sau (tiền mặt)
       };
       bookingMutation.mutate(bookingData);
@@ -285,9 +375,9 @@ export default function ConfirmPayScreen(): React.JSX.Element {
         roomId: parseInt(params.roomId, 10),
         checkInDate: formatDateForAPI(checkIn, '14:00'),
         checkOutDate: formatDateForAPI(checkOut, '12:00'),
-        adults: parseInt(params.adults || '2', 10),
-        children: parseInt(params.children || '0', 10),
-        rooms: parseInt(params.rooms || '1', 10),
+        adults: adults,
+        children: children,
+        rooms: rooms,
         typePayment: false, // false = thanh toán bằng tài khoản (thẻ)
         cardId: selectedCardId, // Gửi cardId của thẻ đã chọn (đảm bảo là number)
       };
@@ -343,9 +433,8 @@ export default function ConfirmPayScreen(): React.JSX.Element {
                 <Text style={styles.summaryReviews}>(95 đánh giá)</Text>
               </View>
               <Text style={styles.summaryGuests}>
-                {params.adults || '2'} người lớn | {params.children || '0'} trẻ em
-                {params.infants && parseInt(params.infants, 10) > 0 && ` | ${params.infants} trẻ sơ sinh`}
-                {params.rooms && parseInt(params.rooms, 10) > 1 && ` | ${params.rooms} phòng`}
+                {adults} người lớn | {children} trẻ em
+                {rooms > 1 && ` | ${rooms} phòng`}
               </Text>
             </View>
           </View>
@@ -361,7 +450,7 @@ export default function ConfirmPayScreen(): React.JSX.Element {
                   {formatDate(checkIn)} - {formatDate(checkOut)}
                 </Text>
               </View>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => setEditDateModalVisible(true)}>
                 <Ionicons name="create-outline" size={20} color={BOOKING_COLORS.PRIMARY} />
               </TouchableOpacity>
             </View>
@@ -370,12 +459,11 @@ export default function ConfirmPayScreen(): React.JSX.Element {
               <View style={styles.detailInfo}>
                 <Text style={styles.detailLabel}>Khách</Text>
                 <Text style={styles.detailValue}>
-                  {params.adults || '2'} người lớn | {params.children || '0'} trẻ em
-                  {params.infants && parseInt(params.infants, 10) > 0 && ` | ${params.infants} trẻ sơ sinh`}
-                  {params.rooms && parseInt(params.rooms, 10) > 1 && ` | ${params.rooms} phòng`}
+                  {adults} người lớn | {children} trẻ em
+                  {rooms > 1 && ` | ${rooms} phòng`}
                 </Text>
               </View>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => setEditGuestsModalVisible(true)}>
                 <Ionicons name="create-outline" size={20} color={BOOKING_COLORS.PRIMARY} />
               </TouchableOpacity>
             </View>
@@ -552,6 +640,226 @@ export default function ConfirmPayScreen(): React.JSX.Element {
           </View>
         </View>
       </ScrollView>
+
+      {/* Edit Date Modal */}
+      <Modal
+        visible={editDateModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setEditDateModalVisible(false)}>
+        <View style={[styles.modalContainer, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setEditDateModalVisible(false)}
+          />
+          <View style={styles.modalContent}>
+            {/* Handle bar */}
+            <View style={styles.modalHandle} />
+            
+            <View style={styles.modalHeader}>
+              <TouchableOpacity
+                onPress={() => setEditDateModalVisible(false)}
+                style={styles.modalCloseButton}>
+                <Ionicons name="close" size={22} color={BOOKING_COLORS.TEXT_SECONDARY} />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Chỉnh sửa ngày</Text>
+              <View style={styles.modalCloseButton} />
+            </View>
+            
+            <View style={styles.bookingSection}>
+              <View style={styles.bookingRow}>
+                <View style={styles.bookingItem}>
+                  <View style={styles.labelContainer}>
+                    <Ionicons name="calendar-outline" size={16} color={BOOKING_COLORS.PRIMARY} />
+                    <Text style={styles.bookingLabel}>Ngày nhận phòng</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.dateInput}
+                    onPress={() => setShowCheckInPicker(true)}
+                    activeOpacity={0.7}>
+                    <Text style={styles.dateInputText}>{formatDateShort(tempCheckIn)}</Text>
+                    <Ionicons name="chevron-down-outline" size={20} color={BOOKING_COLORS.TEXT_SECONDARY} />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.bookingItem}>
+                  <View style={styles.labelContainer}>
+                    <Ionicons name="calendar-outline" size={16} color={BOOKING_COLORS.PRIMARY} />
+                    <Text style={styles.bookingLabel}>Ngày trả phòng</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.dateInput}
+                    onPress={() => setShowCheckOutPicker(true)}
+                    activeOpacity={0.7}>
+                    <Text style={styles.dateInputText}>{formatDateShort(tempCheckOut)}</Text>
+                    <Ionicons name="chevron-down-outline" size={20} color={BOOKING_COLORS.TEXT_SECONDARY} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              {/* Nights display */}
+              <View style={styles.nightsDisplay}>
+                <Ionicons name="moon-outline" size={18} color={BOOKING_COLORS.PRIMARY} />
+                <Text style={styles.nightsText}>
+                  {Math.ceil((tempCheckOut.getTime() - tempCheckIn.getTime()) / (1000 * 60 * 60 * 24))} đêm
+                </Text>
+              </View>
+              
+              <TouchableOpacity
+                style={[
+                  styles.bookingNextButton,
+                  (!tempCheckIn || !tempCheckOut || tempCheckOut <= tempCheckIn) && styles.bookingNextButtonDisabled,
+                ]}
+                onPress={handleSaveDateChanges}
+                disabled={!tempCheckIn || !tempCheckOut || tempCheckOut <= tempCheckIn}
+                activeOpacity={0.8}>
+                <Text style={styles.bookingNextButtonText}>Lưu thay đổi</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Guests Modal */}
+      <Modal
+        visible={editGuestsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setEditGuestsModalVisible(false)}>
+        <View style={[styles.modalContainer, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setEditGuestsModalVisible(false)}
+          />
+          <View style={styles.modalContent}>
+            {/* Handle bar */}
+            <View style={styles.modalHandle} />
+            
+            <View style={styles.modalHeader}>
+              <TouchableOpacity
+                onPress={() => setEditGuestsModalVisible(false)}
+                style={styles.modalCloseButton}>
+                <Ionicons name="close" size={22} color={BOOKING_COLORS.TEXT_SECONDARY} />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Chỉnh sửa số khách</Text>
+              <View style={styles.modalCloseButton} />
+            </View>
+            
+            <View style={styles.bookingSection}>
+              <View style={styles.guestsContentBox}>
+                <View style={styles.guestItem}>
+                  <Text style={styles.guestItemLabel}>Người lớn</Text>
+                  <View style={styles.guestCounterContainer}>
+                    <TouchableOpacity
+                      style={[styles.guestCounterButton, tempAdults <= 1 && styles.guestCounterButtonDisabled]}
+                      onPress={() => updateCount('adults', -1)}
+                      disabled={tempAdults <= 1}>
+                      <Ionicons
+                        name="remove"
+                        size={18}
+                        color={tempAdults <= 1 ? BOOKING_COLORS.TEXT_SECONDARY : BOOKING_COLORS.PRIMARY}
+                      />
+                    </TouchableOpacity>
+                    <Text style={styles.guestCounterValue}>{tempAdults}</Text>
+                    <TouchableOpacity
+                      style={[styles.guestCounterButton, tempAdults >= 10 && styles.guestCounterButtonDisabled]}
+                      onPress={() => updateCount('adults', 1)}
+                      disabled={tempAdults >= 10}>
+                      <Ionicons
+                        name="add"
+                        size={18}
+                        color={tempAdults >= 10 ? BOOKING_COLORS.TEXT_SECONDARY : BOOKING_COLORS.PRIMARY}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.guestItem}>
+                  <Text style={styles.guestItemLabel}>Trẻ em</Text>
+                  <View style={styles.guestCounterContainer}>
+                    <TouchableOpacity
+                      style={[styles.guestCounterButton, tempChildren <= 0 && styles.guestCounterButtonDisabled]}
+                      onPress={() => updateCount('children', -1)}
+                      disabled={tempChildren <= 0}>
+                      <Ionicons
+                        name="remove"
+                        size={18}
+                        color={tempChildren <= 0 ? BOOKING_COLORS.TEXT_SECONDARY : BOOKING_COLORS.PRIMARY}
+                      />
+                    </TouchableOpacity>
+                    <Text style={styles.guestCounterValue}>{tempChildren}</Text>
+                    <TouchableOpacity
+                      style={[styles.guestCounterButton, tempChildren >= 10 && styles.guestCounterButtonDisabled]}
+                      onPress={() => updateCount('children', 1)}
+                      disabled={tempChildren >= 10}>
+                      <Ionicons
+                        name="add"
+                        size={18}
+                        color={tempChildren >= 10 ? BOOKING_COLORS.TEXT_SECONDARY : BOOKING_COLORS.PRIMARY}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.guestItem}>
+                  <Text style={styles.guestItemLabel}>Số phòng</Text>
+                  <View style={styles.guestCounterContainer}>
+                    <TouchableOpacity
+                      style={[styles.guestCounterButton, tempRooms <= 1 && styles.guestCounterButtonDisabled]}
+                      onPress={() => updateCount('rooms', -1)}
+                      disabled={tempRooms <= 1}>
+                      <Ionicons
+                        name="remove"
+                        size={18}
+                        color={tempRooms <= 1 ? BOOKING_COLORS.TEXT_SECONDARY : BOOKING_COLORS.PRIMARY}
+                      />
+                    </TouchableOpacity>
+                    <Text style={styles.guestCounterValue}>{tempRooms}</Text>
+                    <TouchableOpacity
+                      style={[styles.guestCounterButton, tempRooms >= 5 && styles.guestCounterButtonDisabled]}
+                      onPress={() => updateCount('rooms', 1)}
+                      disabled={tempRooms >= 5}>
+                      <Ionicons
+                        name="add"
+                        size={18}
+                        color={tempRooms >= 5 ? BOOKING_COLORS.TEXT_SECONDARY : BOOKING_COLORS.PRIMARY}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+              
+              <TouchableOpacity
+                style={styles.bookingNextButton}
+                onPress={handleSaveGuestsChanges}
+                activeOpacity={0.85}>
+                <Text style={styles.bookingNextButtonText}>Xác nhận</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Date Pickers */}
+      {showCheckInPicker && (
+        <DateTimePicker
+          value={tempCheckIn}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          minimumDate={new Date()}
+          onChange={handleCheckInChange}
+        />
+      )}
+      {showCheckOutPicker && (
+        <DateTimePicker
+          value={tempCheckOut}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          minimumDate={new Date(tempCheckIn.getTime() + 24 * 60 * 60 * 1000)}
+          onChange={handleCheckOutChange}
+        />
+      )}
 
       {/* Bottom Bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
@@ -921,6 +1229,459 @@ const styles = StyleSheet.create({
   },
   payButtonDisabled: {
     opacity: 0.6,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  modalContent: {
+    backgroundColor: BOOKING_COLORS.BACKGROUND,
+    borderRadius: 20,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: {
+          width: 0,
+          height: 8,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 20,
+      },
+    }),
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: BOOKING_COLORS.BORDER,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  modalCloseButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    backgroundColor: BOOKING_COLORS.CARD_BACKGROUND,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: BOOKING_COLORS.TEXT_PRIMARY,
+    letterSpacing: -0.3,
+  },
+  bookingSection: {
+    padding: 0,
+  },
+  guestsContentBox: {
+    backgroundColor: BOOKING_COLORS.CARD_BACKGROUND,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: {
+          width: 0,
+          height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  guestItem: {
+    marginBottom: 20,
+  },
+  guestItemLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: BOOKING_COLORS.TEXT_PRIMARY,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  guestCounterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+  },
+  guestCounterButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: BOOKING_COLORS.PRIMARY,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: BOOKING_COLORS.BACKGROUND,
+  },
+  guestCounterButtonDisabled: {
+    borderColor: BOOKING_COLORS.BORDER,
+    opacity: 0.4,
+  },
+  guestCounterValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: BOOKING_COLORS.TEXT_PRIMARY,
+    minWidth: 40,
+    textAlign: 'center',
+  },
+  bookingSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: BOOKING_COLORS.TEXT_PRIMARY,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  bookingRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 24,
+  },
+  bookingItem: {
+    flex: 1,
+  },
+  guestsListContainer: {
+    gap: 20,
+    marginBottom: 28,
+  },
+  guestItemCard: {
+    backgroundColor: BOOKING_COLORS.BACKGROUND,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: BOOKING_COLORS.BORDER,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: {
+          width: 0,
+          height: 3,
+        },
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  guestItemCardInner: {
+    padding: 20,
+    backgroundColor: BOOKING_COLORS.CARD_BACKGROUND,
+  },
+  guestItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+    gap: 14,
+  },
+  guestItemIconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guestItemIconBackground: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: BOOKING_COLORS.PRIMARY + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: BOOKING_COLORS.PRIMARY + '35',
+  },
+  guestItemIconBackgroundSecondary: {
+    backgroundColor: '#10B981' + '15',
+    borderColor: '#10B981' + '35',
+  },
+  guestItemIconBackgroundTertiary: {
+    backgroundColor: '#8B5CF6' + '15',
+    borderColor: '#8B5CF6' + '35',
+  },
+  guestItemInfo: {
+    flex: 1,
+  },
+  guestItemLabel: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: BOOKING_COLORS.TEXT_PRIMARY,
+    marginBottom: 3,
+    letterSpacing: -0.2,
+  },
+  guestItemSubtext: {
+    fontSize: 13,
+    color: BOOKING_COLORS.TEXT_SECONDARY,
+    fontWeight: '400',
+    lineHeight: 18,
+  },
+  labelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  bookingLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: BOOKING_COLORS.TEXT_PRIMARY,
+  },
+  dateInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: 56,
+    borderWidth: 1.5,
+    borderColor: BOOKING_COLORS.BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    backgroundColor: BOOKING_COLORS.CARD_BACKGROUND,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: {
+          width: 0,
+          height: 1,
+        },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
+  },
+  dateInputText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: BOOKING_COLORS.TEXT_PRIMARY,
+  },
+  nightsDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: BOOKING_COLORS.PRIMARY + '10',
+    borderRadius: 12,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: BOOKING_COLORS.PRIMARY + '20',
+  },
+  nightsText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: BOOKING_COLORS.PRIMARY,
+  },
+  guestsSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    backgroundColor: BOOKING_COLORS.PRIMARY + '10',
+    borderRadius: 18,
+    marginBottom: 24,
+    borderWidth: 1.5,
+    borderColor: BOOKING_COLORS.PRIMARY + '20',
+    ...Platform.select({
+      ios: {
+        shadowColor: BOOKING_COLORS.PRIMARY,
+        shadowOffset: {
+          width: 0,
+          height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  guestsSummaryIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: BOOKING_COLORS.PRIMARY + '18',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: BOOKING_COLORS.PRIMARY + '30',
+  },
+  guestsSummaryContent: {
+    flex: 1,
+    gap: 3,
+  },
+  guestsSummaryLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: BOOKING_COLORS.TEXT_SECONDARY,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  guestsSummaryText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: BOOKING_COLORS.TEXT_PRIMARY,
+    letterSpacing: 0.2,
+    lineHeight: 22,
+  },
+  counterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingVertical: 4,
+  },
+  counterButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: {
+          width: 0,
+          height: 3,
+        },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  counterButtonMinus: {
+    backgroundColor: '#EF4444',
+  },
+  counterButtonPlus: {
+    backgroundColor: BOOKING_COLORS.PRIMARY,
+  },
+  counterButtonDisabled: {
+    backgroundColor: BOOKING_COLORS.BORDER,
+    opacity: 0.35,
+    ...Platform.select({
+      ios: {
+        shadowOpacity: 0,
+      },
+      android: {
+        elevation: 0,
+      },
+    }),
+  },
+  counterValueContainer: {
+    minWidth: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  counterValueBackground: {
+    backgroundColor: BOOKING_COLORS.BACKGROUND,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderWidth: 2,
+    borderColor: BOOKING_COLORS.PRIMARY + '25',
+    minWidth: 64,
+    ...Platform.select({
+      ios: {
+        shadowColor: BOOKING_COLORS.PRIMARY,
+        shadowOffset: {
+          width: 0,
+          height: 2,
+        },
+        shadowOpacity: 0.12,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  counterValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: BOOKING_COLORS.PRIMARY,
+    letterSpacing: 0.5,
+  },
+  bookingNextButton: {
+    width: '100%',
+    backgroundColor: BOOKING_COLORS.PRIMARY,
+    paddingVertical: 18,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+    borderWidth: 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: BOOKING_COLORS.PRIMARY,
+        shadowOffset: {
+          width: 0,
+          height: 4,
+        },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  bookingNextButtonDisabled: {
+    backgroundColor: BOOKING_COLORS.TEXT_SECONDARY,
+    opacity: 0.5,
+    ...Platform.select({
+      ios: {
+        shadowOpacity: 0,
+      },
+      android: {
+        elevation: 0,
+      },
+    }),
+  },
+  bookingNextButtonIcon: {
+    marginRight: 2,
+  },
+  bookingNextButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: BOOKING_COLORS.BACKGROUND,
   },
 });
 

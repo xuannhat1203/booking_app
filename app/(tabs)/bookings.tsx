@@ -32,6 +32,7 @@ interface Booking {
   id: string;
   bookingId: string;
   roomId: number;
+  roomNumber: string;
   bookingDate: string;
   checkInDate: string;
   checkOutDate: string;
@@ -69,6 +70,7 @@ const transformApiBookingToBooking = (apiBooking: ApiBookingItem, status: 'upcom
     id: String(apiBooking.id),
     bookingId: String(apiBooking.id),
     roomId: apiBooking.roomId,
+    roomNumber: apiBooking.roomNumber || '',
     bookingDate: formatBookingDate(apiBooking.checkInDate, apiBooking.checkOutDate),
     checkInDate: apiBooking.checkInDate,
     checkOutDate: apiBooking.checkOutDate,
@@ -321,7 +323,11 @@ export default function BookingsScreen(): React.JSX.Element {
       <View style={styles.bookingContent}>
         <View style={styles.bookingHeader}>
           <View>
-            <Text style={styles.bookingId}>Booking ID: {item.bookingId}</Text>
+            {item.roomNumber ? (
+              <Text style={styles.bookingId}>Phòng {item.roomNumber}</Text>
+            ) : (
+              <Text style={styles.bookingId}>Booking ID: {item.bookingId}</Text>
+            )}
             <Text style={styles.bookingDate}>{item.bookingDate}</Text>
           </View>
         </View>

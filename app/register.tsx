@@ -44,6 +44,15 @@ export default function RegisterScreen(): React.JSX.Element {
   const [dateOfBirth, setDateOfBirth] = useState<Date>(new Date(2000, 0, 1));
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
   const [datePickerModalVisible, setDatePickerModalVisible] = useState<boolean>(false);
+  const [errors, setErrors] = useState<{
+    fullName?: string;
+    email?: string;
+    password?: string;
+    address?: string;
+    phone?: string;
+    gender?: string;
+    dateOfBirth?: string;
+  }>({});
 
   const registerMutation = useMutation({
     mutationFn: (registerData: {
@@ -59,7 +68,6 @@ export default function RegisterScreen(): React.JSX.Element {
       try {
         const token = data?.data?.token || data?.data?.accessToken || data?.token;
         if (token) {
-          // Trim token để loại bỏ khoảng trắng thừa
           const trimmedToken = token.trim();
           await AsyncStorage.setItem('accessToken', trimmedToken);
           setAccessToken(trimmedToken);
@@ -115,7 +123,6 @@ export default function RegisterScreen(): React.JSX.Element {
   });
 
   const formatDateForAPI = (date: Date): string => {
-    // Format thành DD-MM-YYYY cho backend Java (theo test Postman thành công)
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -139,63 +146,69 @@ export default function RegisterScreen(): React.JSX.Element {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       if (selectedDate >= today) {
-        showWarning('Ngày sinh phải là một ngày trong quá khứ');
+        setErrors({ ...errors, dateOfBirth: 'Ngày sinh phải là một ngày trong quá khứ' });
         return;
       }
       setDateOfBirth(selectedDate);
+      if (errors.dateOfBirth) {
+        setErrors({ ...errors, dateOfBirth: undefined });
+      }
     }
   };
 
   const handleRegister = (): void => {
+    const newErrors: typeof errors = {};
+    let hasError = false;
     if (!fullName.trim()) {
-      showWarning('Vui lòng nhập họ tên');
-      return;
-    }
-    if (fullName.trim().length < 2 || fullName.trim().length > 100) {
-      showWarning('Họ tên phải có từ 2-100 ký tự');
-      return;
-    }
-    if (!email.trim() || !email.includes('@')) {
-      showWarning('Vui lòng nhập địa chỉ email hợp lệ');
-      return;
+      newErrors.fullName = 'Vui lòng nhập họ tên';
+      hasError = true;
+    } else if (fullName.trim().length < 2 || fullName.trim().length > 100) {
+      newErrors.fullName = 'Họ tên phải có từ 2-100 ký tự';
+      hasError = true;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      showWarning('Email không hợp lệ');
-      return;
+    if (!email.trim()) {
+      newErrors.email = 'Vui lòng nhập địa chỉ email';
+      hasError = true;
+    } else if (!emailRegex.test(email.trim())) {
+      newErrors.email = 'Địa chỉ email không hợp lệ';
+      hasError = true;
     }
+
     if (!password.trim() || password.length < 6) {
-      showWarning('Mật khẩu phải có ít nhất 6 ký tự');
-      return;
+      newErrors.password = 'Mật khẩu phải có ít nhất 6 ký tự';
+      hasError = true;
     }
     if (!address.trim()) {
-      showWarning('Vui lòng nhập địa chỉ');
-      return;
-    }
-    if (address.trim().length < 5 || address.trim().length > 255) {
-      showWarning('Địa chỉ phải có từ 5-255 ký tự');
-      return;
+      newErrors.address = 'Vui lòng nhập địa chỉ';
+      hasError = true;
+    } else if (address.trim().length < 5 || address.trim().length > 255) {
+      newErrors.address = 'Địa chỉ phải có từ 5-255 ký tự';
+      hasError = true;
     }
     if (phone.trim()) {
       const cleanedPhone = phone.trim().replace(/[\s\-\(\)]/g, '');
-      const phoneRegex = /^\d{10,15}$/;
-      if (!phoneRegex.test(cleanedPhone)) {
-        showWarning('Số điện thoại không hợp lệ. Vui lòng nhập 10-15 chữ số');
-        return;
+      const vnPhoneRegex = /^(0|\+84)(3[2-9]|5[0-9]|7[0-9]|8[1-9]|9[0-9])[0-9]{7}$/;
+      if (!vnPhoneRegex.test(cleanedPhone)) {
+        newErrors.phone = 'Số điện thoại không hợp lệ. Vui lòng nhập số di động Việt Nam';
+        hasError = true;
       }
     }
     if (!gender) {
-      showWarning('Vui lòng chọn giới tính');
-      return;
+      newErrors.gender = 'Vui lòng chọn giới tính';
+      hasError = true;
     }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (dateOfBirth >= today) {
-      showWarning('Ngày sinh phải là một ngày trong quá khứ');
+      newErrors.dateOfBirth = 'Ngày sinh phải là một ngày trong quá khứ';
+      hasError = true;
+    }
+    setErrors(newErrors);
+    if (hasError) {
       return;
     }
-
-    // Format gender theo backend yêu cầu (Nam, Nữ, Khác)
+    setErrors({});
     let formattedGender = gender;
     if (gender === 'MALE') {
       formattedGender = 'Nam';
@@ -236,45 +249,75 @@ export default function RegisterScreen(): React.JSX.Element {
             label="Họ tên *"
             placeholder="Nhập họ tên (2-100 ký tự)"
             value={fullName}
-            onChangeText={setFullName}
+            onChangeText={(text) => {
+              setFullName(text);
+              if (errors.fullName) {
+                setErrors({ ...errors, fullName: undefined });
+              }
+            }}
             keyboardType="default"
             leftIcon="person-outline"
+            error={errors.fullName}
           />
 
           <AuthInput
             label="Địa chỉ email *"
             placeholder="Nhập email"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(text) => {
+              setEmail(text);
+              if (errors.email) {
+                setErrors({ ...errors, email: undefined });
+              }
+            }}
             keyboardType="email-address"
             leftIcon="mail-outline"
+            error={errors.email}
           />
 
           <AuthInput
             label="Mật khẩu *"
             placeholder="Nhập mật khẩu (ít nhất 6 ký tự)"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(text) => {
+              setPassword(text);
+              if (errors.password) {
+                setErrors({ ...errors, password: undefined });
+              }
+            }}
             secureTextEntry
             leftIcon="lock-closed-outline"
+            error={errors.password}
           />
 
           <AuthInput
             label="Địa chỉ *"
             placeholder="Nhập địa chỉ (5-255 ký tự)"
             value={address}
-            onChangeText={setAddress}
+            onChangeText={(text) => {
+              setAddress(text);
+              if (errors.address) {
+                setErrors({ ...errors, address: undefined });
+              }
+            }}
             keyboardType="default"
             leftIcon="location-outline"
+            error={errors.address}
           />
 
           <AuthInput
             label="Số điện thoại"
             placeholder="Nhập số điện thoại (tùy chọn)"
             value={phone}
-            onChangeText={setPhone}
+            onChangeText={(text) => {
+              setPhone(text);
+              if (errors.phone) {
+                setErrors({ ...errors, phone: undefined });
+              }
+            }}
             keyboardType="phone-pad"
             leftIcon="call-outline"
+            error={errors.phone}
           />
 
           {/* Gender Selection */}
@@ -287,12 +330,19 @@ export default function RegisterScreen(): React.JSX.Element {
                   style={[
                     styles.genderOption,
                     gender === option.value && styles.genderOptionSelected,
+                    errors.gender && styles.genderOptionError,
                   ]}
-                  onPress={() => setGender(option.value)}>
+                  onPress={() => {
+                    setGender(option.value);
+                    if (errors.gender) {
+                      setErrors({ ...errors, gender: undefined });
+                    }
+                  }}>
                   <View
                     style={[
                       styles.radioButton,
                       gender === option.value && styles.radioButtonSelected,
+                      errors.gender && styles.radioButtonError,
                     ]}>
                     {gender === option.value && <View style={styles.radioButtonInner} />}
                   </View>
@@ -306,6 +356,7 @@ export default function RegisterScreen(): React.JSX.Element {
                 </TouchableOpacity>
               ))}
             </View>
+            {errors.gender && <Text style={styles.errorText}>{errors.gender}</Text>}
           </View>
 
           {/* Date of Birth */}
@@ -317,6 +368,7 @@ export default function RegisterScreen(): React.JSX.Element {
               onChangeText={() => {}}
               editable={false}
               leftIcon="calendar-outline"
+              error={errors.dateOfBirth}
               onPress={() => {
                 if (Platform.OS === 'ios') {
                   setDatePickerModalVisible(true);
@@ -384,7 +436,7 @@ export default function RegisterScreen(): React.JSX.Element {
                   value={dateOfBirth}
                   mode="date"
                   display="spinner"
-                  maximumDate={new Date(Date.now() - 24 * 60 * 60 * 1000)} // Yesterday
+                  maximumDate={new Date(Date.now() - 24 * 60 * 60 * 1000)} 
                   onChange={handleDateChange}
                   locale="vi-VN"
                 />
@@ -458,6 +510,9 @@ const styles = StyleSheet.create({
     borderColor: AUTH_COLORS.PRIMARY,
     backgroundColor: `${AUTH_COLORS.PRIMARY}10`,
   },
+  genderOptionError: {
+    borderColor: AUTH_COLORS.ERROR,
+  },
   radioButton: {
     width: 20,
     height: 20,
@@ -470,6 +525,9 @@ const styles = StyleSheet.create({
   },
   radioButtonSelected: {
     borderColor: AUTH_COLORS.PRIMARY,
+  },
+  radioButtonError: {
+    borderColor: AUTH_COLORS.ERROR,
   },
   radioButtonInner: {
     width: 10,
@@ -501,6 +559,12 @@ const styles = StyleSheet.create({
   },
   dateContainer: {
     marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 12,
+    color: AUTH_COLORS.ERROR,
+    marginTop: 4,
+    marginLeft: 4,
   },
   modalOverlay: {
     flex: 1,

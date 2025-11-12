@@ -63,6 +63,7 @@ export const getNearbyRoom = async (): Promise<Room[]> => {
             hotelName: room.hotelName || '',
             imageUrl: room.imageUrl || 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=400',
             rating: room.rating ? Number(room.rating) : 0,
+            location: room.address || room.location || room.hotelAddress || ""
         }));
         const shuffled = mappedRooms.sort(() => 0.5 - Math.random());
         return shuffled.slice(0, 2);

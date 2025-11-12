@@ -366,3 +366,11 @@ export const createCard = async (idUser: number | string, nameUser: string): Pro
         throw error;
     }
 };
+export const getEmailCheck = async (email: string) => {
+    try {
+        const response = await axiosInstance.post("/checkEmail", email);
+        return response.data.exists;
+    } catch (error) {
+        console.log(error);
+    }
+}

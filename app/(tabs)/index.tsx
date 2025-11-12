@@ -127,7 +127,7 @@ export default function HomeScreen(): React.JSX.Element {
         </View>
 
         {/* Best Hotels */}
-        {renderSectionHeader('Khách sạn tốt nhất', () => router.push('/filter'))}
+        {renderSectionHeader('Phòng nghỉ tốt nhất', () => router.push('/filter'))}
         <FlatList
           data={localBestHotels || []}
           renderItem={({ item }) => (
@@ -149,17 +149,26 @@ export default function HomeScreen(): React.JSX.Element {
         {/* Nearby Hotels */}
         {renderSectionHeader('Gần vị trí của bạn', () => router.push('/filter'))}
           <View style={styles.nearbyHotels}>
-            {localNearbyHotels.map((hotel: any) => (
-              <HotelCard
-                key={hotel.id}
-                hotel={hotel}
-                variant="vertical"
-                onPress={() => router.push(`/hotel-detail/${hotel.id}`)}
-                onFavoritePress={() =>
-                  toggleFavorite(hotel.id, localNearbyHotels, setLocalNearbyHotels)
-                }
-              />
-            ))}
+            {localNearbyHotels.map((hotel: any) => {
+              // Map location thành address nếu cần
+              const hotelData: Hotel = {
+                ...hotel,
+                address: hotel.address || hotel.location || hotel.hotelName || 'Địa chỉ không xác định',
+                id: typeof hotel.id === 'string' ? parseInt(hotel.id) || 0 : hotel.id || 0,
+                hotelId: typeof hotel.hotelId === 'string' ? parseInt(hotel.hotelId) || 0 : hotel.hotelId || 0,
+              };
+              return (
+                <HotelCard
+                  key={hotel.id}
+                  hotel={hotelData}
+                  variant="vertical"
+                  onPress={() => router.push(`/hotel-detail/${hotel.id}`)}
+                  onFavoritePress={() =>
+                    toggleFavorite(hotel.id, localNearbyHotels, setLocalNearbyHotels)
+                  }
+                />
+              );
+            })}
           </View>
       </ScrollView>
     </View>

@@ -1,6 +1,7 @@
-import { sendRequestCode } from '@/apis/authApi';
+import { getEmailCheck, sendRequestCode } from '@/apis/authApi';
 import { AuthButton } from '@/components/auth/button';
 import { AUTH_COLORS } from '@/constants/auth';
+import { useToast } from '@/hooks/use-toast';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation } from '@tanstack/react-query';
@@ -29,9 +30,10 @@ interface ContactOption {
 export default function ForgotPasswordScreen(): React.JSX.Element {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { showError, ToastComponent } = useToast();
   const [selectedOption, setSelectedOption] = useState<string>('1');
   const [email, setEmail] = useState<string>('');
-
+  
   useEffect(() => {
     const getEmail = async () => {
       try {
@@ -51,12 +53,59 @@ export default function ForgotPasswordScreen(): React.JSX.Element {
       router.push('/enter-otp');
     },
     onError: (error: any) => {
-      if (__DEV__) console.error('Error sending OTP request:', error);
+      // Kiểm tra nếu là lỗi email không tồn tại
+      const status = error?.response?.status || error?.status;
+      const errorMessage = 
+        error?.response?.data?.errors?.message || 
+        error?.response?.data?.message || 
+        error?.userMessage || 
+        error?.message || 
+        '';
+      
+      const isEmailNotFound = 
+        status === 401 || 
+        errorMessage.includes('Email không tồn tại') ||
+        errorMessage.includes('Invalid credentials');
+
+      if (isEmailNotFound) {
+        // Email không tồn tại
+        showError('Email đăng nhập không tồn tại');
+        // Sau 5 giây quay lại màn hình login
+        setTimeout(() => {
+          router.replace('/login');
+        }, 5000);
+      } else {
+        // Lỗi khác, chỉ log trong dev mode
+        if (__DEV__) {
+          console.error('Error sending OTP request:', error);
+        }
+      }
+    },
+  });
+
+  const checkExisEmail = useMutation({
+    mutationKey: ["check_email", email],
+    mutationFn: () => getEmailCheck(email),
+    onSuccess: () => {
+      // Email tồn tại, tiếp tục gửi OTP
+      sendRequestOtp.mutate(email);
+    },
+    onError: (error: any) => {
+      // Email không tồn tại
+      if (__DEV__) {
+        console.error('Email check error:', error);
+      }
+      showError('Email đăng nhập không tồn tại');
+      // Sau 5 giây quay lại màn hình login
+      setTimeout(() => {
+        router.replace('/login');
+      }, 5000);
     },
   });
 
   const handleContinue = (): void => {
-    sendRequestOtp.mutate(email);
+    // Kiểm tra email trước khi gửi OTP
+    checkExisEmail.mutate();
   };
 
 
@@ -82,6 +131,7 @@ export default function ForgotPasswordScreen(): React.JSX.Element {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.BACKGROUND} />
+      {ToastComponent}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={AUTH_COLORS.TEXT_PRIMARY} />
@@ -155,7 +205,12 @@ export default function ForgotPasswordScreen(): React.JSX.Element {
             ))}
           </View>
 
-          <AuthButton title="Continue" onPress={handleContinue} />
+          <AuthButton 
+            title="Continue" 
+            onPress={handleContinue}
+            loading={checkExisEmail.isPending || sendRequestOtp.isPending}
+            disabled={checkExisEmail.isPending || sendRequestOtp.isPending}
+          />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

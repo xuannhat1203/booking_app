@@ -28,21 +28,23 @@ export default function LoginScreen(): React.JSX.Element {
   const { showSuccess, showError, ToastComponent } = useToast();
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  
+  // Field-level error states
+  const [errors, setErrors] = useState<{
+    username?: string;
+    password?: string;
+  }>({});
   React.useEffect(() => {
-    const saveUsername = async (): Promise<void> => {
+    const saveEmail = async (): Promise<void> => {
       if (username.trim().length > 0) {
         try {
-          const isEmail = username.includes('@');
-          if (isEmail) {
-            await AsyncStorage.setItem('email', username.trim());
-          }
-          await AsyncStorage.setItem('username', username.trim());
+          await AsyncStorage.setItem('email', username.trim());
         } catch (error) {
         }
       }
     };
     const timer = setTimeout(() => {
-      saveUsername();
+      saveEmail();
     }, 500);
     
     return () => clearTimeout(timer);
@@ -110,7 +112,36 @@ export default function LoginScreen(): React.JSX.Element {
   });
 
   const handleLogin = (): void => {
-    if (!isFormValid) return;
+    const newErrors: typeof errors = {};
+    let hasError = false;
+
+    // Validate email (bắt buộc phải là email hợp lệ)
+    if (!username.trim()) {
+      newErrors.username = 'Vui lòng nhập email';
+      hasError = true;
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(username.trim())) {
+        newErrors.username = 'Email không hợp lệ';
+        hasError = true;
+      }
+    }
+
+    // Validate password
+    if (!password.trim()) {
+      newErrors.password = 'Vui lòng nhập mật khẩu';
+      hasError = true;
+    }
+
+    // Set errors and return if validation fails
+    setErrors(newErrors);
+    if (hasError) {
+      return;
+    }
+
+    // Clear all errors before submitting
+    setErrors({});
+
     loginMutation.mutate({ username, password });
   };
 
@@ -131,22 +162,34 @@ export default function LoginScreen(): React.JSX.Element {
           <Text style={styles.subtitle}>Nhập thông tin của bạn bên dưới</Text>
 
           <AuthInput
-            label="Tên đăng nhập hoặc Email"
-            placeholder="Nhập tên đăng nhập hoặc email"
+            label="Email"
+            placeholder="Nhập email"
             value={username}
-            onChangeText={setUsername}
-            keyboardType="default"
+            onChangeText={(text) => {
+              setUsername(text);
+              if (errors.username) {
+                setErrors({ ...errors, username: undefined });
+              }
+            }}
+            keyboardType="email-address"
             leftIcon="mail-outline"
             autoCapitalize="none"
+            error={errors.username}
           />
 
           <AuthInput
             label="Mật khẩu"
             placeholder="Nhập mật khẩu"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(text) => {
+              setPassword(text);
+              if (errors.password) {
+                setErrors({ ...errors, password: undefined });
+              }
+            }}
             secureTextEntry
             leftIcon="lock-closed-outline"
+            error={errors.password}
           />
 
           <TouchableOpacity

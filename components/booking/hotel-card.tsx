@@ -58,6 +58,12 @@ export const HotelCard: React.FC<HotelCardProps> = ({
         <Text style={styles.hotelName} numberOfLines={1}>
           {hotel.hotelName}
         </Text>
+        {hotel.roomNumber && (
+          <View style={styles.roomNumberRow}>
+            <Ionicons name="bed-outline" size={14} color={BOOKING_COLORS.TEXT_SECONDARY} />
+            <Text style={styles.roomNumber}>Phòng {hotel.roomNumber}</Text>
+          </View>
+        )}
         <View style={styles.locationRow}>
           <Ionicons name="location-outline" size={14} color={BOOKING_COLORS.TEXT_SECONDARY} />
           <Text style={styles.location} numberOfLines={1}>
@@ -151,6 +157,17 @@ const styles = StyleSheet.create({
     color: BOOKING_COLORS.TEXT_PRIMARY,
     marginBottom: 6,
     letterSpacing: -0.3,
+  },
+  roomNumberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  roomNumber: {
+    fontSize: 14,
+    color: BOOKING_COLORS.TEXT_SECONDARY,
+    fontWeight: '500',
   },
   locationRow: {
     flexDirection: 'row',
